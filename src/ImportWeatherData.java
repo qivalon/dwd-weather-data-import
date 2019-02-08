@@ -3,20 +3,27 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.FilenameFilter;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
+import java.lang.reflect.Method;
 import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Collection;
 import java.util.Date;
 import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.TimeZone;
 import java.util.TreeMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
@@ -37,49 +44,43 @@ public class ImportWeatherData {
         String state;
     }
 
-    static class AirTemperature {
-        static final String CSV_HEADER = 
-            "stationId;measurementTime;airTemperature;relativeHumidity";
-            //"stationId;measurementTime;quality;airAirTemperature;relativeHumidity";
+    static class Measurement {
         int stationId;
         Date measurementTime;
         int quality;
+    }
+
+    static class AirTemperature extends Measurement {
+        static final String CSV_HEADER = 
+            "stationId;measurementTime;airTemperature;relativeHumidity";
+            //"stationId;measurementTime;quality;airAirTemperature;relativeHumidity";
         double airTemperature;
         int relativeHumidity;
     }
 
-    static class Wind {
+    static class Wind extends Measurement {
         static final String CSV_HEADER = 
             "stationId;measurementTime;meanWindSpeed;meanWindDirection";
             //"stationId;measurementTime;quality;meanWindSpeed;meanWindDirection";
-        int stationId;
-        Date measurementTime;
-        int quality;
         double meanWindSpeed;
         int meanWindDirection;
     }
 
-    static class Precipitation {
+    static class Precipitation extends Measurement {
         static final String CSV_HEADER = 
             "stationId;measurementTime;height;form";
             //"stationId;measurementTime;quality;height;hasFallen;form";
-        int stationId;
-        Date measurementTime;
-        int quality;
         double height;
         boolean hasFallen;
         int form;
     }
-    
-    static class Pressure {
-    	static final String CSV_HEADER =
-    			"stationId;measurementTime;pressureNN;pressureStationHeight";
-    			//"stationId;measurementTime;quality;pressureNN;pressureStationHeight";
-    	int stationId;
-    	Date measurementTime;
-    	int quality;
-    	double pressureNN;
-    	double pressureStationHeight;
+
+    static class Pressure extends Measurement {
+        static final String CSV_HEADER =
+            "stationId;measurementTime;pressureNN;pressureStationHeight";
+            //"stationId;measurementTime;quality;pressureNN;pressureStationHeight";
+        double pressureNN;
+        double pressureStationHeight;
     }
 
     static final String DATE_FORMAT = "yyyyMMdd";
@@ -142,50 +143,45 @@ public class ImportWeatherData {
     }
 
     static List<Pressure> readPressures(File file, Date from, Date to,
-    		Map<Integer, Station> stations) throws IOException, ParseException {
-    	if (!file.getName().endsWith("zip"))
-    		return null;
-    	
-    	ZipFile zipFile = new ZipFile(file);
-    	BufferedReader reader = readFromZip(zipFile, from, to);
-    	if (reader == null)
-    		return null;
+            Map<Integer, Station> stations) throws IOException, ParseException {
 
-    	DateFormat dateTimeFormat = new SimpleDateFormat(DATE_TIME_FORMAT);
+        ZipFile zipFile = new ZipFile(file);
+        BufferedReader reader = readFromZip(zipFile, from, to);
+        if (reader == null)
+            return null;
+
+        DateFormat dateTimeFormat = new SimpleDateFormat(DATE_TIME_FORMAT);
         dateTimeFormat.setTimeZone(TimeZone.getTimeZone("UTC"));
-    	List<Pressure> pressures = new ArrayList<>();
-    	String line = reader.readLine();
+        List<Pressure> pressures = new ArrayList<>();
+        String line = reader.readLine();
 
-    	while ((line = reader.readLine()) != null) {
-			String[] parts = line.split(";");
-			Date measurementTime = dateTimeFormat.parse(parts[1]);
-			if (measurementTime.before(from) || measurementTime.after(to)) 
-				continue;
-			Pressure pressure = new Pressure();
-			pressure.stationId = Integer.parseInt(parts[0].trim());
-			if (!stations.containsKey(pressure.stationId))
-				continue;
-			pressure.measurementTime = measurementTime;
-			pressure.quality = Integer.parseInt(parts[2].trim());
-			pressure.pressureNN = Double.parseDouble(parts[3].trim());
-			if (pressure.pressureNN == MISSING_VALUE)
-				continue;
-			pressure.pressureStationHeight = Double.parseDouble(parts[4].trim());
-			if (pressure.pressureStationHeight == MISSING_VALUE)
-				pressure.pressureStationHeight = -1;
-			pressures.add(pressure);
-		}
-    	reader.close();
-    	zipFile.close();
-    	
-    	return pressures;
+        while ((line = reader.readLine()) != null) {
+            String[] parts = line.split(";");
+            Date measurementTime = dateTimeFormat.parse(parts[1]);
+            if (measurementTime.before(from) || measurementTime.after(to)) 
+                continue;
+            Pressure pressure = new Pressure();
+            pressure.stationId = Integer.parseInt(parts[0].trim());
+            if (!stations.containsKey(pressure.stationId))
+                continue;
+            pressure.measurementTime = measurementTime;
+            pressure.quality = Integer.parseInt(parts[2].trim());
+            pressure.pressureNN = Double.parseDouble(parts[3].trim());
+            if (pressure.pressureNN == MISSING_VALUE)
+                continue;
+            pressure.pressureStationHeight = Double.parseDouble(parts[4].trim());
+            if (pressure.pressureStationHeight == MISSING_VALUE)
+                pressure.pressureStationHeight = -1;
+            pressures.add(pressure);
+        }
+        reader.close();
+        zipFile.close();
+        
+        return pressures;
     }
 
     static List<AirTemperature> readAirTemperatures(File file, Date from, Date to,
         Map<Integer, Station> stations) throws IOException, ParseException {
-        
-        if (!file.getName().endsWith("zip"))
-            return null;
         
         ZipFile zipFile = new ZipFile(file);
         BufferedReader reader = readFromZip(zipFile, from ,to);
@@ -223,25 +219,25 @@ public class ImportWeatherData {
     }
 
     static void writePressures(List<Pressure> pressures, String filename) throws IOException {
-    	File file = new File(filename);
-    	boolean firstLine = !file.exists();
-    	BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(
-    			new FileOutputStream(file, true), "UTF-8"));
-    	if (firstLine) {
-    		writer.write(Pressure.CSV_HEADER);
-    		writer.newLine();
-    	}
-    	DateFormat dateFormat = new SimpleDateFormat(CSV_DATE_TIME_FORMAT);
-    	
-    	for (Pressure pressure : pressures) {
-    		writer.write(pressure.stationId + ";" +
-    				dateFormat.format(pressure.measurementTime) + ";" +
-    				//pressure.quality + ";" +
-    				pressure.pressureNN + ";" +
-    				pressure.pressureStationHeight);
-    		writer.newLine();
-    	}
-    	writer.close();
+        File file = new File(filename);
+        boolean firstLine = !file.exists();
+        BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(
+                new FileOutputStream(file, true), "UTF-8"));
+        if (firstLine) {
+            writer.write(Pressure.CSV_HEADER);
+            writer.newLine();
+        }
+        DateFormat dateFormat = new SimpleDateFormat(CSV_DATE_TIME_FORMAT);
+        
+        for (Pressure pressure : pressures) {
+            writer.write(pressure.stationId + ";" +
+                    dateFormat.format(pressure.measurementTime) + ";" +
+                    //pressure.quality + ";" +
+                    pressure.pressureNN + ";" +
+                    pressure.pressureStationHeight);
+            writer.newLine();
+        }
+        writer.close();
     }
 
     static void writeAirTemperatures(List<AirTemperature> airTemperatures, String fileName)
@@ -271,8 +267,6 @@ public class ImportWeatherData {
     static List<Wind> readWinds(File file, Date from, Date to,
         Map<Integer, Station> stations) throws IOException, ParseException {
 
-        if (!file.getName().endsWith("zip"))
-            return null;
         ZipFile zipFile = new ZipFile(file);
         BufferedReader reader = readFromZip(zipFile, from ,to);
         if (reader == null)
@@ -332,9 +326,6 @@ public class ImportWeatherData {
 
     static List<Precipitation> readPrecipitations(File file, Date from, Date to,
         Map<Integer, Station> stations) throws IOException, ParseException { 
-
-        if (!file.getName().endsWith("zip"))
-            return null;
 
         ZipFile zipFile = new ZipFile(file);
         BufferedReader reader = readFromZip(zipFile, from ,to);
@@ -431,20 +422,106 @@ public class ImportWeatherData {
         
         return reader;
     }
-    
-    public static void main(String[] args) throws IOException, ParseException {
-    	
-    	System.out.println(new File("").getAbsolutePath());
-    	
+
+    static <M extends Measurement> M locateMostRecentEntry(Collection<M> data) {
+        Iterator<M> dataIterator = data.iterator();
+        M mostRecentEntry = dataIterator.next();
+        while (dataIterator.hasNext()) {
+            M entry = dataIterator.next();
+            if (entry.measurementTime.after(mostRecentEntry.measurementTime))
+                mostRecentEntry = entry;
+        }
+        return mostRecentEntry;
+    }
+
+    static int extractStationIdFromFilename(String filename) {
+        // Parse the number between the second and the third underscore within the filename
+        int start = filename.indexOf('_') + 1;
+        start = filename.indexOf('_', start) + 1;
+        int end = filename.indexOf('_', start);
+        return Integer.parseInt(filename.substring(start, end));
+    }
+
+    static class MeasurementImporter<M extends Measurement> implements Runnable {
+
+        final String baseDir, outFileName;
+        final Map<Integer, Station> stations;
+        final Method readMethod, writeMethod;
+        final Date from, to;
+
+        MeasurementImporter(String baseDir, String outFileName, Map<Integer, Station> stations,
+            Date from, Date to, String readMethod, String writeMethod)
+            throws NoSuchMethodException {
+
+            this.baseDir = baseDir;
+            this.outFileName = outFileName;
+            this.stations = stations;
+            this.readMethod = ImportWeatherData.class.getDeclaredMethod(readMethod,
+                File.class, Date.class, Date.class, Map.class);
+            this.writeMethod = ImportWeatherData.class.getDeclaredMethod(writeMethod,
+                List.class, String.class);
+            this.from = from;
+            this.to = to;
+        }
+
+        @Override
+        public void run() {
+            try {
+                // Read in all historical data that fall into the time span in focus
+                Map<Integer, Date> mostRecentHistoricalData = new HashMap<Integer, Date>();
+                FilenameFilter zipFileFilter = new FilenameFilter() {
+                    @Override
+                    public boolean accept(File dir, String name) {
+                        return name.endsWith(".zip");
+                    }
+                };
+                File[] files = new File(baseDir + "/historical").listFiles(zipFileFilter);
+                int count = 0;
+                if (files != null) {
+                    for (File file : files) {
+                        System.out.println(++count + "/" + files.length);
+                        List<M> measurements = (List<M>)
+                            readMethod.invoke(ImportWeatherData.class, file, from, to, stations);
+                        if (measurements != null && measurements.size() > 0) {
+                            writeMethod.invoke(ImportWeatherData.class, measurements, outFileName);
+                            M mostRecentEntry = locateMostRecentEntry(measurements);
+                            mostRecentHistoricalData.put(mostRecentEntry.stationId, mostRecentEntry.measurementTime);
+                        }
+                    }
+                }
+
+                // Read in more recent data starting from the end date of the historical data
+                files = new File(baseDir + "/recent").listFiles(zipFileFilter);
+                count = 0;
+                if (files != null) {
+                    for (File file : files) {
+                        System.out.println(++count + "/" + files.length);
+                        int stationId = extractStationIdFromFilename(file.getName());
+                        Date lastDate = mostRecentHistoricalData.get(stationId);
+                        if (lastDate != null)
+                            lastDate.setTime(lastDate.getTime() + 1000);
+                        Date fromDate = lastDate == null ? from
+                            : lastDate.after(from) ? lastDate : from;
+                        List<M> measurements = (List<M>) readMethod.invoke(ImportWeatherData.class,
+                            file, fromDate, to, stations);
+                        if (measurements != null && measurements.size() > 0)
+                            writeMethod.invoke(ImportWeatherData.class, measurements, outFileName);
+                    }
+                }
+            } catch (Exception e) {
+                e.printStackTrace(System.err);
+            }
+        }
+    }
+
+    public static void main(String[] args) throws NoSuchMethodException,
+        IOException, ParseException {
+
         Calendar cal = Calendar.getInstance();
         cal.set(2012, 0, 1, 0, 0);
         Date from =  cal.getTime();
-        cal.set(2018, 0, 1, 0, 0);
+        cal.set(2019, 0, 1, 0, 0);
         Date to = cal.getTime();
-
-        cal = Calendar.getInstance();
-        cal.set(cal.get(Calendar.YEAR) - 1, 11, 31, 23, 59);
-        Date endOfLastYear = cal.getTime();
 
         // Input files
         String dir = "dwd";
@@ -479,144 +556,18 @@ public class ImportWeatherData {
             + "RR_Stundenwerte_Beschreibung_Stationen.txt");
         writeStations(stations, stationFile);
 
-        new Thread() {
-            public void run() {
-                try {
-                    File[] files = new File(airTemperatureDir + "/historical").listFiles();
-                    int count = 0;
-                    if (files != null) {
-                    	for (File file : files) {
-                            System.out.println(++count + "/" + files.length);
-                            List<AirTemperature> airTemperatures =
-                                readAirTemperatures(file, from, to, stations);
-                            if (airTemperatures != null && airTemperatures.size() > 0)
-                                writeAirTemperatures(airTemperatures, airTemperatureFile);
-                        }
-                    }
-                    files = new File(airTemperatureDir + "/recent").listFiles();
-                    count = 0;
-                    if (files == null) {
-                    	return;
-                    }
-                    for (File file : files) {
-                        System.out.println(++count + "/" + files.length);
-                        List<AirTemperature> airTemperatures = readAirTemperatures(file,
-                            from.before(endOfLastYear) ? endOfLastYear : from, to,
-                            stations);
-                        if (airTemperatures != null && airTemperatures.size() > 0)
-                            writeAirTemperatures(airTemperatures, airTemperatureFile);
-                    }
-                } catch (IOException e) {
-                    e.printStackTrace();
-                } catch (ParseException e) {
-                    e.printStackTrace();
-                }
-            }
-        }.start();
-
-        new Thread() {
-            public void run() {
-                try {
-                    File[] files = new File(windDir + "/historical").listFiles();
-                    int count = 0;    
-                    if (files != null) {
-	                    for (File file : files) {
-	                        System.out.println(++count + "/" + files.length);
-	                        List<Wind> winds = readWinds(file, from, to, stations);
-	                        if (winds != null && winds.size() > 0)
-	                            writeWinds(winds, windFile);
-	                    }
-                    }
-                    files = new File(windDir + "/recent").listFiles();
-                    count = 0;  
-                    if (files == null) {
-                    	return;
-                    }
-                    for (File file : files) {
-                        System.out.println(++count + "/" + files.length);
-                        List<Wind> winds = readWinds(file,
-                            from.before(endOfLastYear) ? endOfLastYear : from, to,
-                            stations);
-                        if (winds != null && winds.size() > 0)
-                            writeWinds(winds, windFile);
-                    }
-                } catch (IOException e) {
-                    e.printStackTrace();
-                } catch (ParseException e) {
-                    e.printStackTrace();
-                }
-            }
-        }.start();
-
-        new Thread() {
-            public void run() {
-                try {
-                    File[] files = new File(precipitationDir + "/historical").listFiles();
-                    int count = 0;
-                    if (files != null) {
-                    	for (File file : files) {
-                            System.out.println(++count + "/" + files.length);
-                            List<Precipitation> precipitations =
-                                readPrecipitations(file, from, to, stations);
-                            if (precipitations != null && precipitations.size() > 0)
-                                writePrecipitations(precipitations, precipitationFile);
-                        }
-                    }
-                    
-                    files = new File(precipitationDir + "/recent").listFiles();
-                    count = 0;
-                    if (files == null) {
-                    	return;
-                    }
-                    for (File file : files) {
-                        System.out.println(++count + "/" + files.length);
-                        List<Precipitation> precipitations = readPrecipitations(file,
-                            from.before(endOfLastYear) ? endOfLastYear : from, to,
-                            stations);
-                        if (precipitations != null && precipitations.size() > 0)
-                            writePrecipitations(precipitations, precipitationFile);
-                    }
-                } catch (IOException e) {
-                    e.printStackTrace();
-                } catch (ParseException e) {
-                    e.printStackTrace();
-                }
-            }
-        }.start();
-        
-        new Thread() {
-            public void run() {
-                try {
-                    File[] files = new File(pressureDir + "/historical").listFiles();
-                    int count = 0;
-                    if (files != null) {
-                    	for (File file : files) {
-                            System.out.println(++count + "/" + files.length);
-                            List<Pressure> pressures =
-                                readPressures(file, from, to, stations);
-                            if (pressures != null && pressures.size() > 0)
-                                writePressures(pressures, pressureFile);
-                        }
-                    }
-                    files = new File(pressureDir + "/recent").listFiles();
-                    count = 0;
-                    if (files == null) {
-                    	return;
-                    }
-                    for (File file : files) {
-                        System.out.println(++count + "/" + files.length);
-                        List<Pressure> pressures = readPressures(file,
-                            from.before(endOfLastYear) ? endOfLastYear : from, to,
-                            stations);
-                        if (pressures != null && pressures.size() > 0)
-                            writePressures(pressures, pressureFile);
-                    }
-                } catch (IOException e) {
-                    e.printStackTrace();
-                } catch (ParseException e) {
-                    e.printStackTrace();
-                }
-            }
-        }.start();
+        ExecutorService executorService = Executors.newFixedThreadPool(4);
+        executorService.execute(new MeasurementImporter<AirTemperature>(
+            airTemperatureDir, airTemperatureFile, stations, from, to,
+            "readAirTemperatures", "writeAirTemperatures"));
+        executorService.execute(new MeasurementImporter<Wind>(
+            windDir, windFile, stations, from, to,
+            "readWinds", "writeWinds"));
+        executorService.execute(new MeasurementImporter<Precipitation>(
+            precipitationDir, precipitationFile, stations, from, to,
+            "readPrecipitations", "writePrecipitations"));
+        executorService.execute(new MeasurementImporter<Pressure>(
+            pressureDir, pressureFile, stations, from, to,
+            "readPressures", "writePressures"));
     }
 }

@@ -2,6 +2,9 @@ import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
 
+/**
+ * Grid representation necessary to interpret the binary file format.
+ */
 public class Grid {
 
     static final double[][] LON, LAT;
@@ -73,5 +76,4 @@ public class Grid {
             }
         }
     }
-
 }

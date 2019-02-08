@@ -13,7 +13,10 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.zip.GZIPInputStream;
 
-public class Binary {
+/**
+ * Importer for the binary file format.
+ */
+public class BinaryFileImporter {
 
     private static final String FILE_REGEX = "raa01-rw_10000-(\\d{10})-dwd---bin";
 

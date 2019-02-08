@@ -1,2 +1,7 @@
 bin
 dwd
+air_temperature.csv
+precipitation.csv
+pressure.csv
+weatherstation.csv
+wind.csv

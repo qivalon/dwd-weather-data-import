@@ -90,9 +90,9 @@ public class ImportWeatherData {
     static final int MISSING_VALUE = -999;
 
     static final String REGEX_HISTORICAL = 
-        "stundenwerte_[A-Za-b0-9]{2}_(\\d{5})_(\\d{8})_(\\d{8})_hist.zip";    
+        "stundenwerte_\\w{2}_(\\d{5})_(\\d{8})_(\\d{8})_hist.zip";    
     static final String REGEX_CURRENT =
-        "stundenwerte_[A-Z]{2}_\\d+_akt.zip";
+        "stundenwerte_\\w{2}_\\d+_akt.zip";
 
     static void readStations(Map<Integer, Station> stations, String file)
         throws IOException, ParseException {

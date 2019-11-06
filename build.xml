@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE project>
+<project name="dwd-weather-data-import" default="compile">
+    <description>
+        Build file for DWD weather data import tool.
+    </description>
+
+    <target name="compile" description="Compiles all .java files">
+        <mkdir dir="bin"/>
+        <javac srcdir="src" destdir="bin" listfiles="yes"
+            encoding="UTF-8" debug="true" debuglevel="source,lines,vars"
+            source="1.7" target="1.7">
+        </javac>
+    </target>
+
+    <target name="run" description="Imports all files in dwd directory">
+        <java classname="ImportWeatherData" fork="true" classpath="bin"/>
+    </target>
+     
+    <target name="clean" description="Removes all generated files">
+        <delete dir="bin"/>
+    </target>
+</project>
+

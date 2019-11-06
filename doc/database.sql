@@ -15,8 +15,7 @@ create table weatherstation (
   latitude double precision not null
 );
 create index on weatherstation using gist (location);
-copy weatherstation (stationId, fromDate, toDate, longitude, latitude, altitude, name, state) from
-'/home/dirichs/Work/qivalon/workspace/weather-data-import/weatherstation.csv' with delimiter ';' csv header;
+copy weatherstation (stationId, fromDate, toDate, longitude, latitude, altitude, name, state) from 'weatherstation.csv' with delimiter ';' csv header;
 update weatherstation set location = st_point(longitude, latitude);
 alter table weatherstation alter column location set not null;
 alter table weatherstation drop longitude;
@@ -34,7 +33,7 @@ create index on airtemperature (stationId);
 create index on airtemperature (measurementTime);
 
 copy airtemperature (stationId, measurementTime, temperature, relativeHumidity) from
-'/home/dirichs/Work/qivalon/workspace/weather-data-import/air_temperature.csv' with delimiter ';' csv header;
+'air_temperature.csv' with delimiter ';' csv header;
 
 drop table precipitation;
 create table precipitation (
@@ -48,7 +47,7 @@ create index on precipitation (stationId);
 create index on precipitation (measurementTime);
 
 copy precipitation (stationId, measurementTime, height, form) from
-'/home/dirichs/Work/qivalon/workspace/weather-data-import/precipitation.csv' with delimiter ';' csv header;
+'precipitation.csv' with delimiter ';' csv header;
 
 drop table pressure;
 create table pressure (
@@ -62,7 +61,7 @@ create index on pressure (stationId);
 create index on pressure (measurementTime);
 
 copy pressure (stationId, measurementTime, pressureNN, pressureStationHeight) from
-'/home/dirichs/Work/qivalon/workspace/weather-data-import/pressure.csv' with delimiter ';' csv header;
+'pressure.csv' with delimiter ';' csv header;
 
 drop table wind;
 create table wind (
@@ -76,6 +75,6 @@ create index on wind (stationId);
 create index on wind (measurementTime);
 
 copy wind (stationId, measurementTime, meanWindSpeed, meanWindDirection) from
-'/home/dirichs/Work/qivalon/workspace/weather-data-import/wind.csv' with delimiter ';' csv header;
+'wind.csv' with delimiter ';' csv header;
 
 alter table weatherstation owner to dynaserv;
